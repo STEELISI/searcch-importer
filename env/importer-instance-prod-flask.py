@@ -1,3 +1,7 @@
-DEBUG = False
+DEBUG = True
+#SQLALCHEMY_ECHO = True
+#SQLALCHEMY_TRACK_MODIFICATIONS = True
 SQLALCHEMY_ECHO = False
 SQLALCHEMY_TRACK_MODIFICATIONS = False
+#SQLALCHEMY_DATABASE_URI = "sqlite:////var/lib/searcch.db"
+SQLALCHEMY_DATABASE_URI = "sqlite+gsqlite3:////var/lib/searcch.db"

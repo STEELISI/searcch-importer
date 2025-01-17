@@ -1,0 +1,32 @@
+#
+# 7.3.4 has a nasty bug that broke requests.get for us; and other
+# things for others: https://foss.heptapod.net/pypy/pypy/-/issues/3441
+#
+#FROM pypy:3.7-slim-buster
+FROM pypy:3.7-7.3.3-slim-buster
+
+WORKDIR /searcch-importer
+
+RUN apt-get update -y \
+    && apt-get install -y build-essential git libgit2-dev \
+    sqlite3 ca-certificates iproute2 libxml2-dev libxslt1-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --upgrade pip setuptools wheel \
+    && mkdir logs
+
+COPY requirements.txt /searcch-importer
+
+RUN pip install -r requirements.txt
+
+COPY setup.py setup.cfg gunicorn_wrapper.py /searcch-importer/
+
+COPY src /searcch-importer/src
+
+RUN pypy setup.py install
+
+ENV FLASK_APP=searcch.importer.server.app
+ENV FLASK_ENV=development
+
+#CMD [ "flask", "run", "--host", "0.0.0.0", "--port", "80" ]
+#CMD [ "gunicorn", "--config", "gunicorn_conf.py", "searcch.importer.server.app:app" ]
+CMD [ "gunicorn", "--config", "gunicorn_conf.py", "gunicorn_wrapper:app" ]

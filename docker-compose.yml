@@ -1,0 +1,71 @@
+version: '3.7'
+services:
+
+  searcch-importer-prod:
+    image: searcch-importer-prod:compose
+    container_name: searcch-importer-prod
+    hostname: searcch-importer-prod
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.compose
+    volumes:
+      - ${DATADIR:-/data}/searcch-importer-prod/importer.ini:/etc/searcch-importer.ini
+      - ${DATADIR:-/data}/searcch-importer-prod/flask-config.py:/etc/importer-instance-flask.py
+      #- ${DATADIR:-/data}/searcch-importer-prod/searcch.db:/var/lib/searcch.db
+      - ${DATADIR:-/data}/searcch-importer-prod/gunicorn_conf.py:/searcch-importer/gunicorn_conf.py
+      - ${DATADIR:-/data}/searcch-importer-prod/logs/:/searcch-importer/logs/
+    env_file:
+      - env/prod-importer.env
+    networks:
+      - searcch-backend-prod-net
+    ports:
+      - 7000:80
+
+  searcch-importer-dev:
+    image: searcch-importer-dev:compose
+    container_name: searcch-importer-dev
+    hostname: searcch-importer-dev
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.compose
+    volumes:
+      - ${DATADIR:-/data}/searcch-importer-dev/importer.ini:/etc/searcch-importer.ini
+      - ${DATADIR:-/data}/searcch-importer-dev/flask-config.py:/etc/importer-instance-flask.py
+      #- ${DATADIR:-/data}/searcch-importer-dev/searcch.db:/var/lib/searcch.db
+      - ${DATADIR:-/data}/searcch-importer-dev/gunicorn_conf.py:/searcch-importer/gunicorn_conf.py
+      - ${DATADIR:-/data}/searcch-importer-dev/logs/:/searcch-importer/logs/
+    env_file:
+      - env/dev-importer.env
+    networks:
+      - searcch-backend-dev-net
+    ports:
+      - 7000:80
+
+  searcch-importer-local-dev:
+    image: searcch-importer-local-dev:compose
+    container_name: searcch-importer-local-dev
+    hostname: searcch-importer-local-dev
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.compose
+    volumes:
+      - ${DATADIR:-/data}/searcch-importer-local-dev/importer.ini:/etc/searcch-importer.ini
+      - ${DATADIR:-/data}/searcch-importer-local-dev/flask-config.py:/etc/importer-instance-flask.py
+      #- ${DATADIR:-/data}/searcch-importer-local-dev/searcch.db:/var/lib/searcch.db
+      - ${DATADIR:-/data}/searcch-importer-local-dev/gunicorn_conf.py:/searcch-importer/gunicorn_conf.py
+      - ${DATADIR:-/data}/searcch-importer-local-dev/logs/:/searcch-importer/logs/
+    env_file:
+      - env/dev-importer.env
+    networks:
+      - searcch-backend-local-dev-net
+
+networks:
+  searcch-backend-dev-net:
+    name: searcch-backend-dev-net
+  searcch-backend-prod-net:
+    name: searcch-backend-prod-net
+  searcch-backend-local-dev-net:
+    name: searcch-backend-local-dev-net

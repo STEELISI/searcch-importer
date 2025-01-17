@@ -1,2 +1,3 @@
-# searcch-importer
-Clone of SEARCCH importer at flux
+# importer
+
+Import tool for the SEARCCH Hub

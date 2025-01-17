@@ -1,0 +1,29 @@
+FROM ubuntu:20.04
+
+RUN apt-get update -y \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        build-essential python3 python3-pip sqlite3 git libgit2-dev \
+        ca-certificates iproute2 nano libxml2-dev libxslt1-dev zlib1g-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /searcch-importer
+
+COPY requirements.txt /searcch-importer
+
+RUN pip3 install -r requirements.txt
+
+COPY scripts/fetch-corpora.sh /searcch-importer/scripts/
+
+RUN sh scripts/fetch-corpora.sh
+
+COPY setup.py setup.cfg gunicorn_wrapper.py /searcch-importer/
+COPY src /searcch-importer/src
+
+RUN python3 setup.py install
+
+ENV FLASK_APP=searcch.importer.server.app
+ENV FLASK_ENV=development
+
+#CMD [ "flask", "run", "--host", "0.0.0.0", "--port", "80" ]
+CMD [ "gunicorn", "--config", "gunicorn_conf.py", "searcch.importer.server.app:app" ]
+#CMD [ "gunicorn", "--config", "gunicorn_conf.py", "gunicorn_wrapper:app" ]

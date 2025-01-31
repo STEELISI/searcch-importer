@@ -1,0 +1,8 @@
+#!/bin/bash
+
+searcch-importer artifact.import -u $1
+if [ $? -eq 0 ] ; then
+    line=`searcch-importer artifact.list -a | tail -1`
+    id=`echo $line | awk -F',' '{print $1}' | awk -F'=' '{print $2}'`
+    searcch-importer artifact.publish -i $id
+fi

@@ -13,6 +13,8 @@ RUN pip3 install -r requirements.txt
 
 COPY scripts/fetch-corpora.sh /searcch-importer/scripts/
 
+COPY scripts/import-and-publish /searcch-importer/import-and-publish
+
 RUN sh scripts/fetch-corpora.sh
 
 COPY setup.py setup.cfg gunicorn_wrapper.py /searcch-importer/

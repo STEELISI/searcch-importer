@@ -1,4 +1,4 @@
-
+import re
 import sys
 import six
 import logging
@@ -45,6 +45,8 @@ class GithubImporter(BaseImporter):
         """Imports an artifact from Github and returns an Artifact, or throws an error."""
         url = candidate.url
         LOG.debug("importing '%s' from github" % (url,))
+        if "releases" in url:
+            url = re.sub(r"releases.*$", "", url)
         url = url.rstrip("/")
         up = giturlparse.parse(url)
         path = up.owner + "/" + up.repo
@@ -127,6 +129,13 @@ class GithubImporter(BaseImporter):
             LOG.warning("%s missing README",url)
         if f:
             fc = FileContent(content=f.decoded_content,size=f.size)
+            lines = f.decoded_content.splitlines()
+            for l in lines:
+                cand=l.decode('utf-8').replace("#", "").strip()
+                if (cand != ""):
+                    title = cand
+                    break
+            print("Title ", title)
             afm = ArtifactFileMember(
                 pathname=f.path,name=f.name,html_url=f.html_url,
                 download_url=f.download_url,filetype="text",

@@ -7,6 +7,7 @@ import dateutil.parser
 import datetime
 from future.utils import raise_from
 import giturlparse
+import requests
 
 import github
 from github import Github,GithubException
@@ -21,6 +22,16 @@ from searcch.importer.db.model.license import recognize_license
 
 LOG = logging.getLogger(__name__)
 
+def clean(url):
+    if "/releases" in url:
+        url = re.sub(r"/releases.*$", "", url)
+    if "/tree" in url:
+        url = re.sub(r"/tree.*$", "", url)
+    if "/commit" in url:
+        url = re.sub(r"/commit.*$", "", url)
+    url = url.rstrip("/")
+    return url;
+
 class GithubImporter(BaseImporter):
     """Provides a Github Importer."""
 
@@ -29,9 +40,11 @@ class GithubImporter(BaseImporter):
 
     @classmethod
     def can_import(cls,url):
+        print("Checking ", url)
         """Checks to see if this URL is a github URL."""
+        url = clean(url)
         try:
-            url = url.rstrip("/")
+            print("Going into gitparse with ", url)
             ret = giturlparse.parse(url)
             return ret.github
         except BaseException:
@@ -44,16 +57,28 @@ class GithubImporter(BaseImporter):
     def import_artifact(self,candidate):
         """Imports an artifact from Github and returns an Artifact, or throws an error."""
         url = candidate.url
-        LOG.debug("importing '%s' from github" % (url,))
-        if "releases" in url:
-            url = re.sub(r"releases.*$", "", url)
-        url = url.rstrip("/")
+        original_url = url.rstrip("/")
+        url = clean(url)
+        print("Importing artifact from", url, " clean ", clean(url))
+        LOG.warn("importing '%s' from github" % (url,))
+
         up = giturlparse.parse(url)
-        path = up.owner + "/" + up.repo
+            
+        # Check if original URL exists
+        response = requests.get(original_url)
+        if response.status_code != 200:
+            original_url = ""
+
+        path = up.owner + "/" + up.repo        
+
+            
         pygh_treeish = github.GithubObject.NotSet
         treeish = None
+
+        
         if hasattr(up,"branch") and up.branch:
             pygh_treeish = treeish = up.branch
+
         ghkwargs = dict()
         if self.config["github"]["token"]:
             ghkwargs["login_or_token"] = self.config["github"]["token"]
@@ -61,6 +86,7 @@ class GithubImporter(BaseImporter):
             ghkwargs["login_or_token"] = self.config["github"]["username"]
             ghkwargs["password"] = self.config["github"]["password"]
         hub = Github(**ghkwargs)
+
         try:
             repo = hub.get_repo(path)
         except GithubException:
@@ -68,6 +94,7 @@ class GithubImporter(BaseImporter):
             raise_from(HttpError(
                 ex.status,
                 "Failed to get repo object from github API (path %r from url %r): " % (path,url) + ex.data["message"]),ex)
+
 
         # Many projects do not fill this stuff out, but most projects do
         # provide a README.  However, we do not glom that into the description;
@@ -81,6 +108,7 @@ class GithubImporter(BaseImporter):
         # fall back to the login uid.  The problem for us is that we require an
         # author email.  This is often not exactly available.  So then we have
         # to go through commits!
+
         authors = {}
         try:
             contributors = repo.get_contributors()
@@ -123,6 +151,9 @@ class GithubImporter(BaseImporter):
         files = [rf]
         members = []
         f = None
+        lines = None
+
+        # README should be gotten from the special branch if possible
         try:
             f = repo.get_readme(pygh_treeish)
         except GithubException:
@@ -130,11 +161,31 @@ class GithubImporter(BaseImporter):
         if f:
             fc = FileContent(content=f.decoded_content,size=f.size)
             lines = f.decoded_content.splitlines()
+                
+            first = 1
             for l in lines:
-                cand=l.decode('utf-8').replace("#", "").strip()
+                if isinstance(l, bytes):
+                    cand=l.decode('utf-8').strip()
+                else:
+                    cand=l.strip()
+                # Check if this is really title or not,                                                                                         
+                # check for # or * and remove them if there are any                                                                             
                 if (cand != ""):
-                    title = cand
-                    break
+                    print("Cand ", cand)
+                    if ("#" in cand or "*" in cand or "=" in cand):
+                    # this may be just == or -- under the title                                                                              
+                        if (first == 2):
+                            if (cand.replace("=", "") == "" and maybetitle != ""):
+                                title = maybetitle
+                                break
+                        else:
+                            cand = cand.replace("#","").replace("*", "").replace("=", "").strip()
+                            title = cand
+                            break
+                    elif first == 1:
+                        maybetitle = cand
+                        first = 2
+                        
             print("Title ", title)
             afm = ArtifactFileMember(
                 pathname=f.path,name=f.name,html_url=f.html_url,
@@ -143,6 +194,10 @@ class GithubImporter(BaseImporter):
                 mtime=self._parse_time(f.last_modified))
             members.append(afm)
         f = None
+        
+        print("Got README")
+        # Now we can revert to using the base repo
+
         try:
             f = repo.get_license()
         except GithubException:
@@ -164,7 +219,8 @@ class GithubImporter(BaseImporter):
                 license = self.get_license_object(license_short_name)
         if members:
             rf.members = members
-
+        print("Got License")
+            
         # Try to extract a list of releases.
         releases = list()
         rel = None
@@ -265,6 +321,8 @@ class GithubImporter(BaseImporter):
             metadata.append(ArtifactMetadata(
                 name="topics",value=",".join(repo.get_topics()),source="github"))
 
+        if original_url != "":
+            url = original_url
         return Artifact(type="software",url=url,title=title,description=description,
                         name=name,ctime=datetime.datetime.now(),ext_id=path,
                         owner=self.owner_object,importer=self.importer_object,

@@ -17,6 +17,7 @@ while(<$fh>)
 {
     $_ =~ s/\s+//g;
     $imported{$_} = 0;
+    print "Already imported $_\n";
 }
 close($fh);
 @toimport = ();
@@ -24,6 +25,12 @@ my $fh = new IO::File($ARGV[0]);
 while(<$fh>)
 {	
     $_ =~ s/\s+//g;
+    $_ =~ s/releases\/.*$//;
+    $_ =~ s/commit\/.*$//;
+    $_ =~ s/tree\/.*$//;
+    $_ =~ s/commits\/.*$//;
+    $_ =~ s/\/$//g;
+    
     if (!exists($imported{$_}))
     {			      
 	push(@toimport, $_);
@@ -33,11 +40,12 @@ for $u (@toimport)
 {
 	print "Will import $u\n";
 }
-$myscript = "";
 
+$myscript = "";
 for $i (@toimport)
 {
-        $myscript .= "bash import-and-publish $i\n";
+    $myscript .= "bash import-and-publish $i\n";
+    $myscript .= "sleep 1\n";
 }
 $myscript .= "searcch-importer artifact.export -a -e searcch\n";
 open (my $oh, '>', $ARGV[2] . '/logs/importer-script.sh');

@@ -1,4 +1,3 @@
-
 from future.utils import raise_from
 import sys
 import six
@@ -10,6 +9,7 @@ from urllib.parse import urlparse
 import bs4
 import json
 import requests
+import ast
 
 from searcch.importer.importer import BaseImporter
 from searcch.importer.db.model import (
@@ -18,6 +18,16 @@ from searcch.importer.db.model import (
     RecurringVenue,Venue,ArtifactVenue)
 
 LOG = logging.getLogger(__name__)
+
+def jsonify(data):
+    my_dict = ast.literal_eval(data)
+    first = my_dict['items'][0]
+    doi=""
+    for k in first.keys():
+        doi=k
+        break
+    json_string = json.dumps(first[doi])
+    return json_string
 
 class AcmDigitalLibraryImporter(BaseImporter):
     """Provides an ACM DL DOI Importer."""
@@ -81,6 +91,7 @@ class AcmDigitalLibraryImporter(BaseImporter):
         LOG.debug("importing '%s' from ACM Digital Library" % (url,))
         session = requests.session()
         (res,doi) = self.__class__._extract_doi(url,session=session)
+
         firstpage = res.content
         newurl = res.url
         res = session.post(
@@ -94,8 +105,12 @@ class AcmDigitalLibraryImporter(BaseImporter):
             doi = j["DOI"]
 
         title = name = j.get("title")
+        containerTitle = j.get("container-title")
+        print("Title ", title, " container Title ", containerTitle)
+        
         if not title:
             raise Exception("no title ACM metadata")
+        
         description = j.get("abstract")
         if not description:
             LOG.warning("%s (%s) missing abstract",newurl,url)
@@ -206,11 +221,13 @@ class AcmDigitalLibraryImporter(BaseImporter):
                 filter(Venue.url  == venue_url).\
                 filter(Venue.verified == True).first()
             if venue_object:
+                print("Appended existing venue object")
                 artifact_venue.append(ArtifactVenue(venue=venue_object))
             else:
                 vvalues = dict(url=venue_url,type=venue_type,verified=False,
-                               title=j["container-title"],
+                               title=containerTitle,
                                publisher_url=venue_url)
+                print("Created new venue object with ", containerTitle)
                 if "ISBN" in j:
                     vvalues["isbn"] = j["ISBN"]
                 if "ISSN" in j:
@@ -230,20 +247,18 @@ class AcmDigitalLibraryImporter(BaseImporter):
 
                 # Also try to extract a RecurringVenue object.
                 if recurring_venue_url:
+                    print("Recurring venue url ", recurring_venue_url)
                     rvalues = dict(
                         type=venue_object.type, verified=False,
                         url=recurring_venue_url)
                     rpage = session.get(recurring_venue_url)
                     rsoup = bs4.BeautifulSoup(rpage.content, 'html.parser')
-                    telm = rsoup.find("div", {"class": "left-bordered-title"})
-                    selms = None
+                    telm = rsoup.find("h1", {"class": "title lines-1"})
+                    selm = rsoup.find("p", {"class": "banner__text"})
                     if telm:
-                        selms = telm.findAll("span")
-                    if selms and len(selms) == 2:
-                        rvalues["abbrev"] = selms[0].text
-                        if rvalues["abbrev"].islower():
-                            rvalues["abbrev"] = rvalues["abbrev"].upper()
-                        rvalues["title"] = selms[1].text
+                        rvalues["abbrev"] = telm.text
+                    if selm:
+                        rvalues["title"] = selm.text
                     recurring_venue = RecurringVenue(**rvalues)
                     venue_object.recurring_venue = recurring_venue
 

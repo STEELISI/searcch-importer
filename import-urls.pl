@@ -4,6 +4,27 @@
 use Digest::MD5 qw(md5_hex);
 use POSIX qw(strftime);
 
+sub rewrite
+{
+    $url = shift;
+    # if it looks like https://zenodo.org/doi/10.5281/zenodo.11298208
+    # or like https://zenodo.org/records/12811284
+    # should look like this https://doi.org/10.5281/zenodo.13117988
+    @elems = split /\//, $url;
+    $lastel = @elems[$#elems];
+    if ($lastel =~ /\./)
+    {
+	@elemsn = split /\./, $lastel;
+	$id = $elemsn[1];
+    }
+    else
+    {
+	$id = $lastel;	    
+    }
+    $url = "https://doi.org/10.5281/zenodo." . $id;
+    return $url;
+}
+
 $usage = "$0 new-file imported-objects log-path\n";
 
 if ($#ARGV < 2)
@@ -16,24 +37,48 @@ my $fh = new IO::File($ARGV[1]);
 while(<$fh>)
 {
     $_ =~ s/\s+//g;
-    $imported{$_} = 0;
-    print "Already imported $_\n";
+    $url = $_;
+    if ($url =~ /zenodo.org/)
+    {
+	$url = rewrite($url);
+    }
+    $imported{$url} = 0;
+    print "Already imported $url\n";
 }
 close($fh);
 @toimport = ();
 my $fh = new IO::File($ARGV[0]);
 while(<$fh>)
-{	
+{
+    print "Read $_";
     $_ =~ s/\s+//g;
-    $_ =~ s/releases\/.*$//;
-    $_ =~ s/commit\/.*$//;
-    $_ =~ s/tree\/.*$//;
-    $_ =~ s/commits\/.*$//;
-    $_ =~ s/\/$//g;
+    $_ =~ s/\/$//;
+
+    $url = $_;
     
-    if (!exists($imported{$_}))
-    {			      
-	push(@toimport, $_);
+    if ($url =~ /zenodo.org/)
+    {
+	$url = rewrite($url);
+    }
+	
+    if (!exists($imported{$url}))
+    {
+	$orig = $url;
+	print "Original  $orig\n";
+	# check if base URL is imported
+	$url =~ s/\/commit.*$//;
+	$url =~ s/\/tree.*$//;
+	$url =~ s/\/release.*$//;
+	$url =~ s/\/archive.*$//;
+	$url =~ s/\/$//;
+	if (!exists($imported{$url}))
+	{
+	    push(@toimport, $orig);
+	}
+    }
+    else
+    {
+	print "Already exists $url\n";
     }
 }
 for $u (@toimport)

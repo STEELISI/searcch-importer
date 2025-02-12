@@ -1,10 +1,11 @@
-
+import json
 import sys
 import six
 import logging
 import time
 import dateutil.parser
 import datetime
+import os
 from future.utils import raise_from
 from urllib.parse import urlparse
 import requests
@@ -130,7 +131,7 @@ class ZenodoApi(object):
             return ZenodoRecord(self,j)
 
     def get_license(self,id,raw=False):
-        j = self.get("/licenses/%s" % (str(id),)).json()
+        j = self.get("/licenses?q=%s" % (str(id),)).json()
         if raw:
             return j
         else:
@@ -201,13 +202,14 @@ class ZenodoImporter(BaseImporter):
         if not "metadata" in rj:
             raise MalformedZenodoRecordError("no metadata",record=record_id)
 
-        ztype = "other"
+        ztype = "software"
         if "resource_type" in rj["metadata"] and "type" in rj["metadata"]["resource_type"]:
             ztype = self._map_type(rj["metadata"]["resource_type"]["type"])
         else:
             LOG.warn("missing resource_type.type in zenodo metadata")
         title = rj["metadata"].get("title")
         description = rj["metadata"].get("description")
+        print("Title ", title)
         metadata = list()
         tags = list()
         if "created" in rj:
@@ -248,6 +250,8 @@ class ZenodoImporter(BaseImporter):
                         organization = Organization(
                             name=cr["affiliation"],type="Institution")
                         org_map[cr["affiliation"]] = organization
+                if organization.name is None:
+                    organization.name = "No Organization"
                 person = Person(name=name)
                 if "orcid" in cr:
                     person.meta = [ PersonMetadata(
@@ -263,10 +267,16 @@ class ZenodoImporter(BaseImporter):
                   or "links" not in f \
                   or "self" not in f["links"]:
                     continue
+                filetype = os.path.splitext(f["key"])[-1].replace(".","")
+                # if there is even one zip file we change ztype to software
+                # if it is not software or dataset
+                if (ztype != "software" and ztype != "dataset") and (filetype == "zip" or filetype == "gz"):
+                    ztype = "software"
+                print("File ", f["key"], " type ", filetype)
                 files.append(ArtifactFile(
                     url=f["links"]["self"],
                     name=f["key"],
-                    filetype=f.get("type"),
+                    filetype=filetype,
                     size=f.get("size")))
 
         fundings = []
@@ -284,20 +294,46 @@ class ZenodoImporter(BaseImporter):
                 fundings.append(ArtifactFunding(
                     grant_number=str(g["code"]),grant_url=grant_url,
                     grant_title=g.get("title"),organization=org))
-
+        print("Grants ", fundings)
         license = None
         if "license" in rj["metadata"]:
+            print("License is in metadata")
             try:
                 lj = self.api.get_license(rj["metadata"]["license"]["id"],raw=True)
                 LOG.debug("zenodo license: %r",lj)
-                short_name = lj["id"]
-                long_name = lj["metadata"]["title"]
-                license_url = lj["metadata"]["url"]
+                
+                short_name = lj["hits"]["hits"][0]["id"]
+                license_url = lj["hits"]["hits"][0]["props"]["url"]
+                long_name = lj["hits"]["hits"][0]["title"]["en"]
+
                 if short_name:
                     license = self._session.query(License).\
                       filter(License.short_name == short_name).\
                       first()
                 if not license and long_name:
+                    results = self._session.query(License)
+                    found = False
+                    best_score = 0
+                    best_long_name = ""
+                    lwords = long_name.split()
+                    l2words = [s.lower() for s in lwords]
+                    for result in results:
+                        if result.long_name == long_name:
+                            best_score = 100
+                            best_long_name = long_name
+                            found = True
+                            break
+                        else:
+                            rwords = result.long_name.split()
+                            score = 0;
+                            for w in rwords:
+                                if w.lower() in l2words:
+                                    score += 1
+                            if score > best_score:
+                                best_score = score
+                                best_long_name = result.long_name
+                        
+                    long_name = best_long_name
                     license = self._session.query(License).\
                       filter(License.long_name == long_name).\
                       first()

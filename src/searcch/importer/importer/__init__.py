@@ -89,6 +89,7 @@ def load_importers():
         return
 
     from .github import GithubImporter
+    from .webpage import WebpageImporter
     from .zenodo import ZenodoImporter
     from .acm_dl import AcmDigitalLibraryImporter
     from .ieeexplore import IeeeXploreImporter
@@ -109,6 +110,7 @@ def load_importers():
     __importers__[PapersWithCodeImporter.name] = PapersWithCodeImporter
     __importers__[ArxivImporter.name] = ArxivImporter
     __importers__[GitRepoImporter.name] = GitRepoImporter
+    __importers__[WebpageImporter.name] = WebpageImporter
 
     return
 
@@ -144,6 +146,7 @@ def get_importer(url,config,session,name=None,retries=0,interval=None):
                 cls = __importers__[name]
                 i = cls(config,session)
                 if i.can_import(url):
+                    print("Returning ", i)
                     return i
             except Exception:
                 LOG.debug("unexpected error in %s.can_import:",

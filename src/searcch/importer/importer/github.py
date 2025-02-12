@@ -25,6 +25,8 @@ LOG = logging.getLogger(__name__)
 def clean(url):
     if "/releases" in url:
         url = re.sub(r"/releases.*$", "", url)
+    if "/archive" in url:
+        url = re.sub(r"/archive.*$", "", url)
     if "/tree" in url:
         url = re.sub(r"/tree.*$", "", url)
     if "/commit" in url:

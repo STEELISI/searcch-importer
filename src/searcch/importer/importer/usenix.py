@@ -6,6 +6,7 @@ import dateutil.parser
 import datetime
 import urllib
 import requests
+import calendar
 from future.utils import raise_from
 from urllib.parse import urlparse
 import bs4
@@ -24,7 +25,9 @@ class USENIXImporter(BaseImporter):
 
     name = "usenix"
     version = "0.1"
+    month_to_number = {month: index for index, month in enumerate(calendar.month_name) if month}
 
+    
     @classmethod
     def _extract_record_id(self, url):
         try:
@@ -104,14 +107,20 @@ class USENIXImporter(BaseImporter):
                     org = Organization(name=org_name, type="Institution",
                                        country=country)
                     org_dict[org_name] = org
-                    for a in range(len(author) - offset):
-                        if author[a].startswith(" and "):
-                            names = author[a].split()
-                            person = Person(name=names[1].strip())
-                            affiliations.append(ArtifactAffiliation(affiliation=Affiliation(person=person,org=org),roles="Author"))
-                        else:
-                            person = Person(name=author[a].strip())
-                            affiliations.append(ArtifactAffiliation(affiliation=Affiliation(person=person,org=org),roles="Author"))
+                for a in range(len(author) - offset):
+                    if " and " in author[a]:                        
+                        names = author[a].split(" and ")
+                        person = Person(name=names[0].strip())
+                        affiliations.append(ArtifactAffiliation(affiliation=Affiliation(person=person,org=org),roles="Author"))
+                        person = Person(name=names[1].strip())
+                        affiliations.append(ArtifactAffiliation(affiliation=Affiliation(person=person,org=org),roles="Author"))
+                    elif author[a].startswith("and"):
+                        names = author[a].split()
+                        person = Person(name=names[1].strip())
+                        affiliations.append(ArtifactAffiliation(affiliation=Affiliation(person=person,org=org),roles="Author"))
+                    else:
+                        person = Person(name=author[a].strip())
+                        affiliations.append(ArtifactAffiliation(affiliation=Affiliation(person=person,org=org),roles="Author"))
         except:
             LOG.warning("failed to parse author list")
             LOG.exception(sys.exc_info()[1])
@@ -236,6 +245,8 @@ class USENIXImporter(BaseImporter):
                 if date:
                     value['year'] = date.split(',')[1].strip()
                     value['month'] = date.split(' ')[0].strip()
+                    if value['month'].isalpha():
+                        value['month'] = self.month_to_number[value['month']]
                     days = date.split(',')[0].split(' ')[1].split("-")
                     value['start_day'] = days[0][0:2]
                     value['end_day'] = days[0][3:5]

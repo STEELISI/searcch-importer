@@ -135,7 +135,8 @@ def validate_url(url,retries=0,interval=None):
 
 def get_importer(url,config,session,name=None,retries=0,interval=None):
     load_importers()
-    validate_url(url,retries=retries,interval=interval)
+    if (not url.endswith(".web")):
+        validate_url(url,retries=retries,interval=interval)
     if name:
         if not name in __importers__:
             raise NotImplementedError("no such importer %r" % (name,))

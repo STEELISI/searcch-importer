@@ -17,6 +17,7 @@ COPY scripts/fetch-corpora.sh /searcch-importer/scripts/
 RUN sh scripts/fetch-corpora.sh
 
 COPY scripts/import-and-publish /searcch-importer/import-and-publish
+COPY scripts/import-web-and-publish /searcch-importer/import-web-and-publish
 COPY setup.py setup.cfg gunicorn_wrapper.py /searcch-importer/
 COPY src /searcch-importer/src
 

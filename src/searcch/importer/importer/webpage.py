@@ -6,7 +6,9 @@ import time
 import dateutil.parser
 import datetime
 from future.utils import raise_from
+import giturlparse
 import requests
+import re
 from bs4 import BeautifulSoup, SoupStrainer
 from urllib.parse import urlparse
 
@@ -21,49 +23,90 @@ from searcch.importer.db.model.license import recognize_license
 LOG = logging.getLogger(__name__)
 
 class WebpageImporter(BaseImporter):
-    """Provides a generic importer from a URL."""
+    """Provides a Github Importer."""
 
-    name = "webpage"
+    name = "webage"
     version = "0.1"
 
     @classmethod
     def can_import(cls,url):
-        print("Checking if webpage can be imported ", url)
-        try:
-            response = requests.get(url)
-            print("Got status code", response.status_code)
-            if response.status_code != 200:
-                return False
-            else:
-                return True
-        except HttpError:
+        print("Checking ", url)
+        if (url.endswith(".web")):
+            return True
+        else:
             return False
+
 
     def import_artifact(self,candidate):
         """Imports an artifact from Github and returns an Artifact, or throws an error."""
         url = candidate.url
-        
         print("Importing artifact from", url)
-        LOG.warn("importing '%s' from webpage" % (url,))
-
-        page = requests.get(url)
-        soup = BeautifulSoup(page.text, features="html.parser")
-        title = soup.find('title').get_text()
-        print("Title ", title)
-        alllinks = soup.find_all('a')
-        for a in alllinks:
-            link = a.get('href')
-            parent_element = a.parent
-            if parent_element:
-                surrounding_text = parent_element.get_text(separator=' ', strip=True)
-                print("text ", surrounding_text)
-            print("link ", link)
-            
-        releases = list()
-        files = list()
+        LOG.warn("importing '%s' from github" % (url,))
         
-        return Artifact(type="software",url=url,title="fake", description="fake",
-                        name="fake",ctime=datetime.datetime.now(),ext_id="",
-                        owner=self.owner_object,importer=self.importer_object,
-                        tags=None,meta=None,files=files,license=None,releases=releases,
-                        affiliations=None)
+        with open(url) as f:                                                   
+            lines = f.readlines()
+            items = lines[0].split('|')
+            authors = items[0].split(',')
+            papertitle = items[1].strip()
+            webpage = items[3].strip()
+            affiliations = []
+            for i in authors:
+                if i.strip() != "":
+                    person = Person(name=i.strip())
+                    affiliations.append(ArtifactAffiliation(affiliation=Affiliation(person=person,org=None),roles="Author"))
+
+            LOG.warn("importing '%s' from webpage" % (webpage,))               
+
+            page = requests.get(webpage)
+            description = page.text
+            soup = BeautifulSoup(page.text, features="html.parser")            
+            title = soup.find('title')
+
+            if title is None or title.get_text() == "":
+                title = soup.find('h1')
+            if title is None or title.get_text() == "":
+                title = soup.find('h2')
+            if title is None or title.get_text() == "":
+                title = soup.find('h3')
+            if title is None or title.get_text() == "":
+                title = soup.find('p')
+            if title is not None:
+                title=title.get_text()
+                title = re.sub(r'[^a-zA-Z0-9\-\_\s]', '', title)
+            else:
+                title = papertitle                
+            
+            print("Title ", title)
+            
+            alllinks = soup.find_all('a')
+            arttype = "software"
+            
+            for a in alllinks:                                                 
+                link = a.get('href')                                           
+                parent_element = a.parent
+                surrounding_text = ""
+                if parent_element:                                             
+                    surrounding_text = parent_element.get_text(separator=' ', strip=True)
+                    
+                if link is not None:
+                    if (link.endswith(".gz") or link.endswith(".zip") or "github.com" in link):
+                        arttype = "software"
+                    if "dataset" in surrounding_text:
+                        arttype = "dataset"
+                    
+            releases = list()                                                  
+            files = list()
+
+            name = title
+            path = None
+            license = None
+            tags = list()
+            metadata = list()
+            
+            return Artifact(type=arttype,url=webpage,title=title,description=description,
+                            name=name,ctime=datetime.datetime.now(),ext_id=path,
+                            owner=self.owner_object,importer=self.importer_object,
+                            tags=tags,meta=metadata,files=files,license=license,releases=releases,
+                            affiliations=affiliations)
+
+        return None

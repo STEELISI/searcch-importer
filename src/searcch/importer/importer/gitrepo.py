@@ -48,7 +48,7 @@ class GitRepoImporter(BaseImporter):
 
         metadata = []
         metadata.append(ArtifactMetadata(
-            name="clone_url",value=up.normalized_cloneable))
+            name="clone_url",value=up.url2https))
         metadata.append(ArtifactMetadata(
             name="git_url",value=up.format("git")))
         metadata.append(ArtifactMetadata(
